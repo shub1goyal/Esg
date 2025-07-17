@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent ESG Data Extractor</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --background-color: #f8f9fa;
+            --text-color: #333;
+            --border-color: #dee2e6;
+            --success-color: #28a745;
+            --error-color: #dc3545;
+            --agent-color-1: #17a2b8;
+            --agent-color-2: #ffc107;
+            --agent-color-3: #28a745;
+            --agent-color-4: #fd7e14;
+            --agent-color-5: #6f42c1;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        input[type="file"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: #fff;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: #fff;
+            margin-right: 10px;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
+        #results-container {
+            margin-top: 30px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 20px;
+        }
+
+        .agent-result {
+            margin-bottom: 25px;
+            border-left: 5px solid;
+            padding-left: 15px;
+        }
+        .agent-result.agent-1 { border-color: var(--agent-color-1); }
+        .agent-result.agent-2 { border-color: var(--agent-color-2); }
+        .agent-result.agent-3 { border-color: var(--agent-color-3); }
+        .agent-result.agent-4 { border-color: var(--agent-color-4); }
+        .agent-result.agent-5 { border-color: var(--agent-color-5); }
+
+
+        .agent-result h3 {
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+
+        .result-item {
+            background-color: var(--background-color);
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .loader .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: var(--primary-color);
+            animation: spin 1s ease infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error, .info {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .error {
+            background-color: var(--error-color);
+            color: #fff;
+        }
+
+        .info {
+            background-color: #e2f3fe;
+            border-left: 6px solid #2196F3;
+        }
+
+        .export-buttons {
+            margin-top: 20px;
+            text-align: right;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Multi-Agent ESG Data Extractor</h1>
+
+        <div class="info">
+            <p><strong>Multi-Agent Analysis:</strong> This tool uses five specialized AI agents to analyze your document in parallel for a comprehensive ESG overview.</p>
+        </div>
+
+        <div id="error-container" class="error" style="display: none;"></div>
+
+        <div class="form-group">
+            <label for="file-upload">1. Upload PDF or Word Document</label>
+            <input type="file" id="file-upload" accept=".pdf,.docx,.txt">
+        </div>
+
+        <div class="form-group">
+            <label for="api-key">2. Enter your Google Studio AI (Gemini 2.5) API Key</label>
+            <input type="password" id="api-key" placeholder="Enter your API key securely">
+        </div>
+
+        <button class="btn btn-primary" id="extract-btn">Extract ESG Data</button>
+
+        <div class="loader" id="loader">
+            <div class="spinner"></div>
+            <p>Deploying AI agents... This may take a moment.</p>
+        </div>
+
+        <div id="results-container"></div>
+        <div class="export-buttons" id="export-buttons">
+            <button class="btn btn-secondary" id="export-json">Export as .json</button>
+            <button class="btn btn-secondary" id="export-csv">Export as .csv</button>
+        </div>
+    </div>
+
+    <script>
+        const extractBtn = document.getElementById('extract-btn');
+        const fileUpload = document.getElementById('file-upload');
+        const apiKeyInput = document.getElementById('api-key');
+        const resultsContainer = document.getElementById('results-container');
+        const loader = document.getElementById('loader');
+        const errorContainer = document.getElementById('error-container');
+        const exportButtons = document.getElementById('export-buttons');
+        const exportJsonBtn = document.getElementById('export-json');
+        const exportCsvBtn = document.getElementById('export-csv');
+
+        let allExtractedData = [];
+
+        const agentTasks = [
+            { name: "Quantitative Environmental Data Agent", task: "Extract specific, measurable environmental data points like GHG emissions (Scope 1, 2, and 3), energy consumption (in MWh or kWh), water usage (in cubic meters), and total waste generated (in tons). Focus on numerical values and their units." },
+            { name: "Environmental Policy & Risk Agent", task: "Identify and summarize the company's environmental policies, climate-related risks and opportunities, and strategies for sustainability. Look for statements about environmental management systems (e.g., ISO 14001)." },
+            { name: "Social Metrics Agent", task: "Extract data and summaries related to employee health and safety (e.g., incident rates), diversity and inclusion metrics (e.g., gender or ethnicity percentages in leadership), employee turnover rates, and community investment figures." },
+            { name: "Governance & Ethics Agent", task: "Identify information about the board structure, executive compensation policies, business ethics, anti-corruption policies, and shareholder rights. Summarize key governance practices." },
+            { name: "Negative Incidents & Controversies Agent", task: "Scan the document for any mention of negative events, controversies, fines, or legal proceedings related to ESG matters. This includes environmental spills, labor disputes, or governance scandals." }
+        ];
+
+        extractBtn.addEventListener('click', async () => {
+            const file = fileUpload.files[0];
+            const apiKey = apiKeyInput.value.trim();
+
+            if (!file || !apiKey) {
+                showError('Please upload a file and enter your API key.');
+                return;
+            }
+
+            if (file.size > 10 * 1024 * 1024) {
+                showError('File is too large. Please upload a file smaller than 10MB.');
+                return;
+            }
+
+            hideError();
+            resultsContainer.innerHTML = '';
+            exportButtons.style.display = 'none';
+            loader.style.display = 'block';
+            allExtractedData = [];
+
+            try {
+                const fileContent = await readFileContent(file);
+                
+                const promises = agentTasks.map(agent => callGeminiApi(fileContent, agent.task, apiKey));
+                const results = await Promise.all(promises);
+
+                displayResults(results);
+                if (allExtractedData.length > 0) {
+                    exportButtons.style.display = 'block';
+                }
+
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                loader.style.display = 'none';
+            }
+        });
+
+        function readFileContent(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => resolve(event.target.result);
+                reader.onerror = (error) => reject(new Error('Failed to read file.'));
+                reader.readAsText(file);
+            });
+        }
+
+        async function callGeminiApi(content, task, key) {
+             const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${key}`;
+
+            const prompt = `
+                Analyze the following document content. Your task as a specialized AI agent is to: ${task}.
+                The document may not be in English; if so, perform internal translation for your analysis.
+                For each piece of relevant information found, provide the following in a structured JSON array format:
+                - "page_number": The page number where the information was found. If not applicable, use 1.
+                - "keywords": An array of identified keywords and phrases.
+                - "summary": A clean, concise summary of the extracted content.
+
+                Document Content:
+                ---
+                ${content}
+                ---
+
+                Output only the JSON array. If no relevant information is found, output an empty array [].
+            `;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`API Error: ${errorData.error.message || response.statusText}`);
+                }
+
+                const data = await response.json();
+                const textResponse = data.candidates[0].content.parts[0].text;
+                
+                try {
+                    const cleanedResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+                    return JSON.parse(cleanedResponse);
+                } catch (e) {
+                    console.error("Failed to parse API response as JSON:", textResponse);
+                    return []; // Return empty array on parsing error to not fail the whole process
+                }
+
+            } catch (error) {
+                console.error('API call failed:', error);
+                throw new Error('An API call failed. Please check your API key and network connection.');
+            }
+        }
+
+        function displayResults(results) {
+            resultsContainer.innerHTML = '<h2>Multi-Agent Analysis Results</h2>';
+            let hasResults = false;
+
+            results.forEach((agentResult, index) => {
+                const agent = agentTasks[index];
+                const agentHtml = document.createElement('div');
+                agentHtml.className = `agent-result agent-${index + 1}`;
+                
+                let contentHtml = `<h3>${agent.name}</h3>`;
+                
+                if (agentResult && agentResult.length > 0) {
+                    hasResults = true;
+                    agentResult.forEach(item => {
+                        contentHtml += `
+                            <div class="result-item">
+                                <p>${item.summary}</p>
+                                <p><strong>Keywords:</strong> ${item.keywords.join(', ')}</p>
+                                <p><strong>Source Page:</strong> ${item.page_number}</p>
+                            </div>
+                        `;
+                        allExtractedData.push({ agent: agent.name, ...item });
+                    });
+                } else {
+                    contentHtml += '<p>No specific data found by this agent.</p>';
+                }
+                
+                agentHtml.innerHTML = contentHtml;
+                resultsContainer.appendChild(agentHtml);
+            });
+
+            if (!hasResults) {
+                 resultsContainer.innerHTML += '<p>No relevant ESG data was found by any of the agents.</p>';
+            }
+        }
+
+        function showError(message) {
+            errorContainer.textContent = message;
+            errorContainer.style.display = 'block';
+        }
+
+        function hideError() {
+            errorContainer.style.display = 'none';
+        }
+
+        exportJsonBtn.addEventListener('click', () => {
+            if (allExtractedData.length === 0) return;
+            const dataStr = JSON.stringify(allExtractedData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'multi_agent_esg_data.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        exportCsvBtn.addEventListener('click', () => {
+            if (allExtractedData.length === 0) return;
+            const csv = convertToCSV(allExtractedData);
+            const dataBlob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'multi_agent_esg_data.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        function convertToCSV(data) {
+            const header = Object.keys(data[0]).join(',');
+            const rows = data.map(row =>
+                Object.values(row).map(value => {
+                    if (Array.isArray(value)) {
+                        return `"${value.join('; ')}"`;
+                    }
+                    const stringValue = String(value).replace(/"/g, '""');
+                    return `"${stringValue}"`;
+                }).join(',')
+            );
+            return [header, ...rows].join('\n');
+        }
+
+    </script>
+</body>
+</html>
