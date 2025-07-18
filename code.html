@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Agent ESG Data Extractor</title>
+    <title>Advanced Multi-Agent ESG Data Extractor</title>
+    <!-- Include the PDF.js library -->
+    <script src="https://mozilla.github.io/pdf.js/build/pdf.js"></script>
     <style>
         :root {
             --primary-color: #007bff;
@@ -11,7 +13,6 @@
             --background-color: #f8f9fa;
             --text-color: #333;
             --border-color: #dee2e6;
-            --success-color: #28a745;
             --error-color: #dc3545;
             --agent-color-1: #17a2b8;
             --agent-color-2: #ffc107;
@@ -82,8 +83,13 @@
             color: #fff;
             width: 100%;
         }
+        
+        .btn-primary:disabled {
+            background-color: var(--secondary-color);
+            cursor: not-allowed;
+        }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             background-color: #0056b3;
         }
 
@@ -144,24 +150,20 @@
         }
 
         @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .error, .info {
             padding: 15px;
             margin-bottom: 20px;
             border-radius: 4px;
-            text-align: center;
         }
 
         .error {
             background-color: var(--error-color);
             color: #fff;
+            text-align: center;
         }
 
         .info {
@@ -177,23 +179,20 @@
     </style>
 </head>
 <body>
-
     <div class="container">
-        <h1>Multi-Agent ESG Data Extractor</h1>
-
+        <h1>Advanced Multi-Agent ESG Data Extractor</h1>
         <div class="info">
-            <p><strong>Multi-Agent Analysis:</strong> This tool uses five specialized AI agents to analyze your document in parallel for a comprehensive ESG overview.</p>
+            <p><strong>Now with PDF Support!</strong> This tool can now properly read PDF documents. Please note DOCX files are not yet supported.</p>
         </div>
 
         <div id="error-container" class="error" style="display: none;"></div>
 
         <div class="form-group">
-            <label for="file-upload">1. Upload PDF or Word Document</label>
-            <input type="file" id="file-upload" accept=".pdf,.docx,.txt">
+            <label for="file-upload">1. Upload PDF Document</label>
+            <input type="file" id="file-upload" accept=".pdf">
         </div>
-
         <div class="form-group">
-            <label for="api-key">2. Enter your Google Studio AI (Gemini 2.5) API Key</label>
+            <label for="api-key">2. Enter your Gemini API Key</label>
             <input type="password" id="api-key" placeholder="Enter your API key securely">
         </div>
 
@@ -201,7 +200,7 @@
 
         <div class="loader" id="loader">
             <div class="spinner"></div>
-            <p>Deploying AI agents... This may take a moment.</p>
+            <p id="loader-text">Analyzing document...</p>
         </div>
 
         <div id="results-container"></div>
@@ -212,11 +211,15 @@
     </div>
 
     <script>
+        // Set the workerSrc for PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://mozilla.github.io/pdf.js/build/pdf.worker.js`;
+
         const extractBtn = document.getElementById('extract-btn');
         const fileUpload = document.getElementById('file-upload');
         const apiKeyInput = document.getElementById('api-key');
         const resultsContainer = document.getElementById('results-container');
         const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loader-text');
         const errorContainer = document.getElementById('error-container');
         const exportButtons = document.getElementById('export-buttons');
         const exportJsonBtn = document.getElementById('export-json');
@@ -231,7 +234,7 @@
             { name: "Governance & Ethics Agent", task: "Identify information about the board structure, executive compensation policies, business ethics, anti-corruption policies, and shareholder rights. Summarize key governance practices." },
             { name: "Negative Incidents & Controversies Agent", task: "Scan the document for any mention of negative events, controversies, fines, or legal proceedings related to ESG matters. This includes environmental spills, labor disputes, or governance scandals." }
         ];
-
+        
         extractBtn.addEventListener('click', async () => {
             const file = fileUpload.files[0];
             const apiKey = apiKeyInput.value.trim();
@@ -241,19 +244,24 @@
                 return;
             }
 
-            if (file.size > 10 * 1024 * 1024) {
-                showError('File is too large. Please upload a file smaller than 10MB.');
+            if (file.size > 15 * 1024 * 1024) { // Increased limit for PDFs
+                showError('File is too large. Please upload a file smaller than 15MB.');
                 return;
             }
-
+            
+            setLoading(true, 'Reading PDF file...');
             hideError();
             resultsContainer.innerHTML = '';
             exportButtons.style.display = 'none';
-            loader.style.display = 'block';
             allExtractedData = [];
 
             try {
                 const fileContent = await readFileContent(file);
+                
+                // If content is too long, we might need to chunk it, but for now, we send it all.
+                console.log(`Extracted ${fileContent.length} characters from the document.`);
+
+                setLoading(true, 'Deploying AI agents...');
                 
                 const promises = agentTasks.map(agent => callGeminiApi(fileContent, agent.task, apiKey));
                 const results = await Promise.all(promises);
@@ -262,70 +270,107 @@
                 if (allExtractedData.length > 0) {
                     exportButtons.style.display = 'block';
                 }
-
             } catch (error) {
-                showError(error.message);
+                console.error("Caught error:", error);
+                // Providing more specific error messages
+                if (error.message.includes("API key not valid")) {
+                    showError("API Error: The API key provided is not valid. Please check for typos or generate a new key.");
+                } else if (error.message.includes("permission")) {
+                     showError("API Error: The API key is not permitted to use the Generative Language API. Please check your Google Cloud project settings.");
+                } else {
+                    showError(error.message);
+                }
             } finally {
-                loader.style.display = 'none';
+                setLoading(false);
             }
         });
+
+        function setLoading(isLoading, text = 'Analyzing document...') {
+            extractBtn.disabled = isLoading;
+            if (isLoading) {
+                loader.style.display = 'block';
+                loaderText.textContent = text;
+            } else {
+                loader.style.display = 'none';
+            }
+        }
 
         function readFileContent(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = (event) => resolve(event.target.result);
-                reader.onerror = (error) => reject(new Error('Failed to read file.'));
-                reader.readAsText(file);
+                reader.onload = async (event) => {
+                    try {
+                        const pdfData = new Uint8Array(event.target.result);
+                        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+                        let fullText = '';
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            const pageText = textContent.items.map(item => item.str).join(' ');
+                            fullText += `[Page ${i}]\n${pageText}\n\n`;
+                        }
+                        resolve(fullText);
+                    } catch (err) {
+                        reject(new Error(`Failed to parse PDF: ${err.message}`));
+                    }
+                };
+                reader.onerror = () => reject(new Error('Failed to read the file.'));
+                reader.readAsArrayBuffer(file);
             });
         }
-
+        
         async function callGeminiApi(content, task, key) {
-             const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${key}`;
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro/generateContent?key=${key}`;
 
+            // We slightly adjust the prompt to be more aware of page numbers
             const prompt = `
-                Analyze the following document content. Your task as a specialized AI agent is to: ${task}.
+                Analyze the following document content, which includes page number markers like [Page X]. 
+                Your task as a specialized AI agent is to: ${task}.
                 The document may not be in English; if so, perform internal translation for your analysis.
                 For each piece of relevant information found, provide the following in a structured JSON array format:
-                - "page_number": The page number where the information was found. If not applicable, use 1.
+                - "page_number": The page number where the information was found (e.g., "Page 5" or "Pages 10-12"). Use the page markers in the text as your source.
                 - "keywords": An array of identified keywords and phrases.
                 - "summary": A clean, concise summary of the extracted content.
 
-                Document Content:
+                Document Content (first 30,000 characters):
                 ---
-                ${content}
+                ${content.substring(0, 30000)}
                 ---
 
                 Output only the JSON array. If no relevant information is found, output an empty array [].
             `;
 
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                const errorMessage = errorData.error?.message || `HTTP Error: ${response.status}`;
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+                // This can happen if the content is flagged as unsafe by the API
+                const finishReason = data.candidates[0]?.finishReason;
+                if(finishReason === 'SAFETY') {
+                    throw new Error("The API blocked the request for safety reasons. The document might contain sensitive content.");
+                }
+                throw new Error("API returned an unexpected response structure.");
+            }
+            const textResponse = data.candidates[0].content.parts[0].text;
+            
             try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                    }),
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`API Error: ${errorData.error.message || response.statusText}`);
-                }
-
-                const data = await response.json();
-                const textResponse = data.candidates[0].content.parts[0].text;
-                
-                try {
-                    const cleanedResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-                    return JSON.parse(cleanedResponse);
-                } catch (e) {
-                    console.error("Failed to parse API response as JSON:", textResponse);
-                    return []; // Return empty array on parsing error to not fail the whole process
-                }
-
-            } catch (error) {
-                console.error('API call failed:', error);
-                throw new Error('An API call failed. Please check your API key and network connection.');
+                const cleanedResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+                return JSON.parse(cleanedResponse);
+            } catch (e) {
+                console.error("Failed to parse API response as JSON:", textResponse);
+                return []; 
             }
         }
 
@@ -347,7 +392,7 @@
                             <div class="result-item">
                                 <p>${item.summary}</p>
                                 <p><strong>Keywords:</strong> ${item.keywords.join(', ')}</p>
-                                <p><strong>Source Page:</strong> ${item.page_number}</p>
+                                <p><strong>Source:</strong> ${item.page_number}</p>
                             </div>
                         `;
                         allExtractedData.push({ agent: agent.name, ...item });
@@ -361,12 +406,12 @@
             });
 
             if (!hasResults) {
-                 resultsContainer.innerHTML += '<p>No relevant ESG data was found by any of the agents.</p>';
+                 resultsContainer.innerHTML += '<p>No relevant ESG data was found by any of the agents. Please ensure the document contains relevant information.</p>';
             }
         }
 
         function showError(message) {
-            errorContainer.textContent = message;
+            errorContainer.innerHTML = message;
             errorContainer.style.display = 'block';
         }
 
@@ -401,6 +446,7 @@
         });
 
         function convertToCSV(data) {
+            if(data.length === 0) return "";
             const header = Object.keys(data[0]).join(',');
             const rows = data.map(row =>
                 Object.values(row).map(value => {
@@ -413,7 +459,6 @@
             );
             return [header, ...rows].join('\n');
         }
-
     </script>
 </body>
 </html>
